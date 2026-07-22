@@ -1,0 +1,1 @@
+# streamsight-subscriber-analytics
