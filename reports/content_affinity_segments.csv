@@ -1,0 +1,8 @@
+segment,affinity_sport,affinity_movies,affinity_drama_entertainment,affinity_kids,affinity_documentary,affinity_news,affinity_reality,n_accounts,dominant_genre
+0,0.413,0.098,0.096,0.098,0.099,0.099,0.096,7259,sport
+1,0.098,0.099,0.415,0.097,0.099,0.097,0.095,7092,drama_entertainment
+2,0.098,0.097,0.097,0.096,0.419,0.097,0.096,7024,documentary
+3,0.097,0.097,0.097,0.098,0.097,0.095,0.419,7052,reality
+4,0.096,0.098,0.099,0.097,0.099,0.412,0.1,7203,news
+5,0.096,0.1,0.097,0.411,0.099,0.096,0.1,7402,kids
+6,0.098,0.42,0.096,0.096,0.097,0.096,0.097,6968,movies

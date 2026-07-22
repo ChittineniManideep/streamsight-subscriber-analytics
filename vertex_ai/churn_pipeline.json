@@ -1,0 +1,392 @@
+{
+  "components": {
+    "comp-check-quality-gate": {
+      "executorLabel": "exec-check-quality-gate",
+      "inputDefinitions": {
+        "artifacts": {
+          "metrics_in": {
+            "artifactType": {
+              "schemaTitle": "system.Metrics",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        },
+        "parameters": {
+          "min_auc": {
+            "parameterType": "NUMBER_DOUBLE"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "parameters": {
+          "Output": {
+            "parameterType": "BOOLEAN"
+          }
+        }
+      }
+    },
+    "comp-condition-1": {
+      "dag": {
+        "tasks": {
+          "register-and-deploy-model": {
+            "cachingOptions": {
+              "enableCache": true
+            },
+            "componentRef": {
+              "name": "comp-register-and-deploy-model"
+            },
+            "inputs": {
+              "artifacts": {
+                "model": {
+                  "componentInputArtifact": "pipelinechannel--train-churn-model-component-model_out"
+                }
+              },
+              "parameters": {
+                "display_name": {
+                  "runtimeValue": {
+                    "constant": "streamsight-churn-model"
+                  }
+                },
+                "project": {
+                  "componentInputParameter": "pipelinechannel--project"
+                },
+                "region": {
+                  "runtimeValue": {
+                    "constant": "europe-west2"
+                  }
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "register-and-deploy-model"
+            }
+          }
+        }
+      },
+      "inputDefinitions": {
+        "artifacts": {
+          "pipelinechannel--train-churn-model-component-model_out": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        },
+        "parameters": {
+          "pipelinechannel--check-quality-gate-Output": {
+            "parameterType": "BOOLEAN"
+          },
+          "pipelinechannel--project": {
+            "parameterType": "STRING"
+          }
+        }
+      }
+    },
+    "comp-extract-features-from-bigquery": {
+      "executorLabel": "exec-extract-features-from-bigquery",
+      "inputDefinitions": {
+        "parameters": {
+          "bq_view": {
+            "parameterType": "STRING"
+          },
+          "project": {
+            "parameterType": "STRING"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "output_dataset": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-register-and-deploy-model": {
+      "executorLabel": "exec-register-and-deploy-model",
+      "inputDefinitions": {
+        "artifacts": {
+          "model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        },
+        "parameters": {
+          "display_name": {
+            "parameterType": "STRING"
+          },
+          "project": {
+            "parameterType": "STRING"
+          },
+          "region": {
+            "parameterType": "STRING"
+          },
+          "serving_container_image_uri": {
+            "defaultValue": "europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.2-1:latest",
+            "isOptional": true,
+            "parameterType": "STRING"
+          }
+        }
+      }
+    },
+    "comp-train-churn-model-component": {
+      "executorLabel": "exec-train-churn-model-component",
+      "inputDefinitions": {
+        "artifacts": {
+          "input_dataset": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "metrics_out": {
+            "artifactType": {
+              "schemaTitle": "system.Metrics",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "model_out": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    }
+  },
+  "defaultPipelineRoot": "gs://streamsight-analytics-pipelines/streamsight",
+  "deploymentSpec": {
+    "executors": {
+      "exec-check-quality-gate": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "check_quality_gate"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef check_quality_gate(metrics_in: Input[Metrics], min_auc: float) -> bool:\n    \"\"\"Blocks promotion to the Model Registry if the new model regresses\n    below the minimum acceptable ROC-AUC threshold.\"\"\"\n    auc = metrics_in.metadata.get(\"roc_auc\", 0.0)\n    print(f\"Trained model ROC-AUC: {auc}, gate threshold: {min_auc}\")\n    return auc >= min_auc\n\n"
+          ],
+          "image": "python:3.11"
+        }
+      },
+      "exec-extract-features-from-bigquery": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "extract_features_from_bigquery"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'google-cloud-bigquery==3.25.0' 'pandas==2.2.2' 'pyarrow==16.1.0'  &&  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef extract_features_from_bigquery(\n    project: str,\n    bq_view: str,\n    output_dataset: Output[Dataset],\n):\n    \"\"\"Reads the churn_training_view built in sql/02_feature_engineering.sql\n    and materialises it as a training dataset artifact.\"\"\"\n    from google.cloud import bigquery\n\n    client = bigquery.Client(project=project)\n    query = f\"SELECT * FROM `{bq_view}`\"\n    df = client.query(query).to_dataframe()\n    df.to_parquet(output_dataset.path + \".parquet\")\n\n"
+          ],
+          "image": "python:3.11"
+        }
+      },
+      "exec-register-and-deploy-model": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "register_and_deploy_model"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'google-cloud-aiplatform==1.60.0'  &&  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef register_and_deploy_model(\n    project: str,\n    region: str,\n    model: Input[Model],\n    display_name: str,\n    serving_container_image_uri: str = (\n        \"europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.2-1:latest\"\n    ),\n):\n    \"\"\"Registers the trained model to Vertex AI Model Registry and deploys\n    it to an endpoint for real-time scoring. Runs only when the quality\n    gate passes, so a regressed model never reaches production.\"\"\"\n    from google.cloud import aiplatform\n\n    aiplatform.init(project=project, location=region)\n\n    uploaded = aiplatform.Model.upload(\n        display_name=display_name,\n        artifact_uri=model.path,\n        serving_container_image_uri=serving_container_image_uri,\n    )\n    endpoint = uploaded.deploy(\n        machine_type=\"n1-standard-4\",\n        min_replica_count=1,\n        max_replica_count=2,\n    )\n    print(f\"Deployed to endpoint: {endpoint.resource_name}\")\n\n"
+          ],
+          "image": "python:3.11"
+        }
+      },
+      "exec-train-churn-model-component": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "train_churn_model_component"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'scikit-learn==1.5.0' 'xgboost==2.1.0' 'pandas==2.2.2' 'joblib==1.4.2'  &&  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef train_churn_model_component(\n    input_dataset: Input[Dataset],\n    model_out: Output[Model],\n    metrics_out: Output[Metrics],\n):\n    \"\"\"Custom training step \u2014 same feature contract as src/train_churn_model.py,\n    packaged to run as a Vertex AI CustomTrainingJob step inside the pipeline.\"\"\"\n    import joblib\n    import pandas as pd\n    from sklearn.compose import ColumnTransformer\n    from sklearn.metrics import roc_auc_score, average_precision_score\n    from sklearn.model_selection import train_test_split\n    from sklearn.pipeline import Pipeline\n    from sklearn.preprocessing import OneHotEncoder\n    import xgboost as xgb\n\n    df = pd.read_parquet(input_dataset.path + \".parquet\")\n    categorical = [\"plan\", \"region\", \"primary_device\", \"contract_type\"]\n    numeric = [c for c in df.columns if c not in categorical + [\"account_id\", \"label\"]]\n\n    X, y = df[categorical + numeric], df[\"label\"]\n    X_train, X_test, y_train, y_test = train_test_split(\n        X, y, test_size=0.2, random_state=42, stratify=y\n    )\n\n    preprocess = ColumnTransformer([\n        (\"cat\", OneHotEncoder(handle_unknown=\"ignore\"), categorical),\n        (\"num\", \"passthrough\", numeric),\n    ])\n    model = xgb.XGBClassifier(\n        n_estimators=300, max_depth=5, learning_rate=0.05,\n        subsample=0.8, colsample_bytree=0.8, eval_metric=\"aucpr\",\n        scale_pos_weight=6.5, random_state=42,\n    )\n    pipe = Pipeline([(\"preprocess\", preprocess), (\"model\", model)])\n    pipe.fit(X_train, y_train)\n\n    proba = pipe.predict_proba(X_test)[:, 1]\n    metrics_out.log_metric(\"roc_auc\", float(roc_auc_score(y_test, proba)))\n    metrics_out.log_metric(\"average_precision\", float(average_precision_score(y_test, proba)))\n\n    joblib.dump(pipe, model_out.path + \".joblib\")\n\n"
+          ],
+          "image": "python:3.11"
+        }
+      }
+    }
+  },
+  "pipelineInfo": {
+    "name": "streamsight-churn-training-pipeline"
+  },
+  "root": {
+    "dag": {
+      "tasks": {
+        "check-quality-gate": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-check-quality-gate"
+          },
+          "dependentTasks": [
+            "train-churn-model-component"
+          ],
+          "inputs": {
+            "artifacts": {
+              "metrics_in": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "metrics_out",
+                  "producerTask": "train-churn-model-component"
+                }
+              }
+            },
+            "parameters": {
+              "min_auc": {
+                "componentInputParameter": "min_auc"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "check-quality-gate"
+          }
+        },
+        "condition-1": {
+          "componentRef": {
+            "name": "comp-condition-1"
+          },
+          "dependentTasks": [
+            "check-quality-gate",
+            "train-churn-model-component"
+          ],
+          "inputs": {
+            "artifacts": {
+              "pipelinechannel--train-churn-model-component-model_out": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "model_out",
+                  "producerTask": "train-churn-model-component"
+                }
+              }
+            },
+            "parameters": {
+              "pipelinechannel--check-quality-gate-Output": {
+                "taskOutputParameter": {
+                  "outputParameterKey": "Output",
+                  "producerTask": "check-quality-gate"
+                }
+              },
+              "pipelinechannel--project": {
+                "componentInputParameter": "project"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "condition-1"
+          },
+          "triggerPolicy": {
+            "condition": "inputs.parameter_values['pipelinechannel--check-quality-gate-Output'] == true"
+          }
+        },
+        "extract-features-from-bigquery": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-extract-features-from-bigquery"
+          },
+          "inputs": {
+            "parameters": {
+              "bq_view": {
+                "componentInputParameter": "bq_view"
+              },
+              "project": {
+                "componentInputParameter": "project"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "extract-features-from-bigquery"
+          }
+        },
+        "train-churn-model-component": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-train-churn-model-component"
+          },
+          "dependentTasks": [
+            "extract-features-from-bigquery"
+          ],
+          "inputs": {
+            "artifacts": {
+              "input_dataset": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "output_dataset",
+                  "producerTask": "extract-features-from-bigquery"
+                }
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "train-churn-model-component"
+          }
+        }
+      }
+    },
+    "inputDefinitions": {
+      "parameters": {
+        "bq_view": {
+          "defaultValue": "streamsight_features.churn_training_view",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "min_auc": {
+          "defaultValue": 0.65,
+          "isOptional": true,
+          "parameterType": "NUMBER_DOUBLE"
+        },
+        "project": {
+          "defaultValue": "streamsight-analytics",
+          "isOptional": true,
+          "parameterType": "STRING"
+        }
+      }
+    }
+  },
+  "schemaVersion": "2.1.0",
+  "sdkVersion": "kfp-2.17.0"
+}

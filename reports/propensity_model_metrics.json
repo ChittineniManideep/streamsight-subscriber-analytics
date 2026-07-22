@@ -1,0 +1,8 @@
+{
+  "roc_auc": 0.7143,
+  "average_precision": 0.6212,
+  "base_acceptance_rate": 0.3814,
+  "n_train": 35242,
+  "n_test": 8811,
+  "n_eligible_accounts": 44053
+}

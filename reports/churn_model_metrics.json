@@ -1,0 +1,10 @@
+{
+  "roc_auc": 0.7025,
+  "average_precision": 0.2714,
+  "base_churn_rate": 0.1338,
+  "top_decile_threshold": 0.6752,
+  "top_decile_precision": 0.324,
+  "top_decile_churn_capture_rate": 0.2422,
+  "n_train": 40000,
+  "n_test": 10000
+}

@@ -1,0 +1,16 @@
+feature,importance
+months_since_last_price_rise,0.063786454
+avg_total_viewing_hours,0.058587864
+nps_last_survey,0.052319344
+support_contacts_last_90d,0.047487568
+billing_dispute_last_90d,0.04531046
+outage_reported_last_90d,0.044172417
+months_to_contract_end,0.038311142
+contract_type_18mo_contract,0.030093165
+current_monthly_price_gbp,0.025801267
+plan_Ultimate TV,0.025472518
+competitor_ad_exposure_score,0.02445313
+contract_type_rolling_monthly,0.021532
+plan_Basic TV,0.019911472
+tenure_months,0.019872067
+region_Scotland,0.0196634
